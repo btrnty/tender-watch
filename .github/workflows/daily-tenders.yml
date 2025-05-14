@@ -31,3 +31,21 @@ jobs:
         run: |
           echo "First 10 lines of daily_tenders.csv"
           head -n 10 daily_tenders.csv
+
+      - name: Send email with CSV
+        env:
+          EMAIL_API_PASS: ${{ secrets.EMAIL_API_PASS }}
+        run: |
+          python - <<'PY'
+          import os, yagmail
+          # initialize SMTP client with your Gmail address and app password
+          yag = yagmail.SMTP("butrint.ymeri@gmail.com", os.environ["EMAIL_API_PASS"])
+          # send the CSV
+          yag.send(
+            to="info@grami-ltd.com",
+            subject=f"Daily Kosovo Tenders – {__import__('datetime').date.today().isoformat()}",
+            contents=["Please find today’s tender summary attached."],
+            attachments="daily_tenders.csv"
+          )
+          PY
+
