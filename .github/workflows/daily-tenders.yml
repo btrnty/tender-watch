@@ -21,9 +21,7 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-      - name: Upload CSV artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: daily-tenders
-          path: daily_tenders.csv
-
+   - name: Preview CSV
+        run: |
+          echo "First 10 lines of daily_tenders.csv"
+          head -n 10 daily_tenders.csv
