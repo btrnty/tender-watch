@@ -2,26 +2,14 @@ name: Daily Kosovo Tenders
 
 on:
   schedule:
-    - cron: '15 4 * * *'    # 06:15 CET daily
+    - cron: '15 4 * * *'
   workflow_dispatch:
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+      …
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - run: pip install -r requirements.txt
-
-      - run: python main.py
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-
-   - name: Preview CSV
-        run: |
-          echo "First 10 lines of daily_tenders.csv"
-          head -n 10 daily_tenders.csv
