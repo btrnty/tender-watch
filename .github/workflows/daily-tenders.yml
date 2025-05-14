@@ -8,6 +8,10 @@ on:
 jobs:
   fetch:
     runs-on: ubuntu-latest
+    # Set working directory to the cloned repo folder
+    defaults:
+      run:
+        working-directory: ./tender-watch
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
