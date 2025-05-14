@@ -8,10 +8,6 @@ on:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    # Set working directory to the cloned repo folder
-    defaults:
-      run:
-        working-directory: ./tender-watch
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,12 +22,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Debug workspace
-        run: |
-          echo "Working directory: $(pwd)"
-          echo "Repository contents:"
-          ls -R .
-
       - name: Run tender summariser
         run: python main.py
         env:
@@ -41,4 +31,3 @@ jobs:
         run: |
           echo "First 10 lines of daily_tenders.csv"
           head -n 10 daily_tenders.csv
-          
