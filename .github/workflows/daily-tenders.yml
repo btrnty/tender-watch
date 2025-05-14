@@ -1,0 +1,28 @@
+name: Daily Kosovo Tenders
+
+on:
+  schedule:
+    - cron: '15 4 * * *'    # 06:15 CET daily
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install -r requirements.txt
+
+      - run: python main.py
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: daily-tenders
+          path: daily_tenders.csv
+
