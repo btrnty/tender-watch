@@ -3,70 +3,80 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+import sys
 import datetime
 import requests
 import pandas as pd
 import openai
-import sys
 
 # 0. Load your OpenAI key
-openai.api_key = os.getenv("OPENAI_API_KEY")
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    print("Error: OPENAI_API_KEY not set")
+    sys.exit(1)
+openai.api_key = api_key
 
 # 1. Date range: yesterday → today
 today = datetime.date.today()
 yesterday = today - datetime.timedelta(days=1)
 
-# 2. Fetch the raw OCDS JSON
+# 2. Fetch today's tender notices from TenderRelease endpoint
 url = "https://ocdskrpp.rks-gov.net/krppAPI/TenderRelease"
 params = {
-    "endDateFrom":  yesterday.isoformat(),
-    "endDateEnd":    today.isoformat(),
-    "DataFormat":    "json",
+    "endDateFrom": yesterday.isoformat(),
+    "endDateEnd":   today.isoformat(),
+    "DataFormat":   "json",
 }
 resp = requests.get(url, params=params, timeout=60)
 resp.raise_for_status()
 raw = resp.json()
 
-if not raw:
-    print("No tenders yesterday.")
-    sys.exit(0)
-
-# 3. Explode 'releases' into a flat DataFrame
+# 3. Normalize and filter for initial tender publications ('tender' tag)
 df = pd.json_normalize(raw, record_path=["releases"])
 if df.empty:
-    print("No tenders yesterday.")
+    print("No releases yesterday.")
+    sys.exit(0)
+# Keep only those tagged as 'tender'
+df = df[df['tag'].apply(lambda tags: 'tender' in tags if isinstance(tags, list) else False)]
+if df.empty:
+    print("No tender notices published yesterday.")
     sys.exit(0)
 
-# 4. Summarise each tender with OpenAI using lower-cost model and error handling
-def summarise(row):
+# 4. Summarize each tender
+
+def summarise_tender(row):
+    title = row.get('tender.title', 'N/A')
+    buyer = row.get('tender.procuringEntity.party.name', 'N/A')
+    value = row.get('tender.value.amount', 0)
+    deadline = row.get('tender.tenderPeriod.endDate', 'N/A')
     prompt = (
-        f"Summarise this Kosovo public tender in max 3 bullet points:\n"
-        f"Title: {row['tender.title']}\n"
-        f"Buyer: {row['tender.procuringEntity.party.name']}\n"
-        f"Value: {row['tender.value.amount']} €\n"
-        f"Deadline: {row['tender.tenderPeriod.endDate']}"
+        f"Summarise this Kosovo tender notice in up to 3 bullet points:\n"
+        f"Title: {title}\n"
+        f"Buyer: {buyer}\n"
+        f"Value: {value} EUR\n"
+        f"Deadline: {deadline}" 
     )
     try:
-        resp = openai.chat.completions.create(
+        resp = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role":"user","content":prompt}]
         )
         return resp.choices[0].message.content.strip()
-    except openai.RateLimitError:
-        return "⚠️ Summary skipped (quota reached)"
-    except openai.OpenAIError as e:
-        return f"⚠️ OpenAI error: {e}"
+    except Exception as e:
+        return f"⚠️ Error summarizing: {e}"
 
-# 5. Apply summarisation and export
-print(f"Processing {len(df)} tenders...")
-df["summary"] = df.apply(summarise, axis=1)
+# 5. Apply summarization and export
+print(f"Found {len(df)} tender notices, summarizing...")
+df['summary'] = df.apply(summarise_tender, axis=1)
 out = df[[
-    "tender.title",
-    "tender.procuringEntity.party.name",
-    "tender.value.amount",
-    "tender.tenderPeriod.endDate",
-    "summary"
+    'tender.title',
+    'tender.procuringEntity.party.name',
+    'tender.value.amount',
+    'tender.tenderPeriod.endDate',
+    'summary'
 ]]
-out.to_csv("daily_tenders.csv", index=False)
-print("Saved daily_tenders.csv")
-
+out.columns = [
+    'Title', 'Buyer', 'ValueEUR', 'Deadline', 'Summary'
+]
+out.to_csv('daily_tender_notices.csv', index=False)
+print("Saved daily_tender_notices.csv")
