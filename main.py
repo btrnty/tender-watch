@@ -2,71 +2,42 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-import os
-import sys
-import datetime
-import requests
-import pandas as pd
+import os, datetime, requests, pandas as pd
+from openai.error import RateLimitError, OpenAIError
+import openai
 
-# 1. Compute today’s date
-today = datetime.date.today()
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-def fetch_tender_notices():
-    """
-    Fetch tender releases for today from the Kosovo PPRC API.
-    """
-    url = "https://ocdskrpp.rks-gov.net/krppAPI/TenderRelease"
-    params = {
-        "endDateFrom": today.isoformat(),
-        "endDateEnd":   today.isoformat(),
-        "DataFormat":   "json",
-    }
-    resp = requests.get(url, params=params, timeout=60)
-    resp.raise_for_status()
-    data = resp.json()
-    return data.get('releases', [])
+# 1) dates
+today = datetime.date.today().isoformat()
 
-# 2. Load and normalize releases
-releases = fetch_tender_notices()
-if not releases:
-    print(f"No tender notices published on {today.isoformat()}.")
-    sys.exit(0)
+# 2) fetch raw releases
+url = "https://ocdskrpp.rks-gov.net/krppAPI/TenderRelease?DataFormat=json"
+resp = requests.get(url)
+resp.raise_for_status()
+data = resp.json()["releases"]
 
-df = pd.json_normalize(releases)
+# 3) normalize to DataFrame
+df = pd.json_normalize(data, sep="_")
 
-# 3. Filter by tag == 'tender' (initial publication)
-df = df[df['tag'].apply(lambda tags: isinstance(tags, list) and 'tender' in tags)]
-if df.empty:
-    print(f"No tender notices published on {today.isoformat()}.")
-    sys.exit(0)
+# 4) filter only initial tenders published today
+def is_initial_tender(tags, date_str):
+    return "tender" in tags and "award" not in tags and date_str.startswith(today)
 
-# 4. Filter by release date equals today (from df['date'])
-df['release_date'] = pd.to_datetime(df['date']).dt.date
-df = df[df['release_date'] == today]
+df = df[df.apply(lambda r: is_initial_tender(r["tag"], r["date"]), axis=1)]
 
-if df.empty:
-    print(f"No tender notices published on {today.isoformat()}.")
-    sys.exit(0)
+# 5) pick columns
+out = pd.DataFrame({
+    "Title":        df["tender_title"],
+    "Buyer":        df["tender_procuringEntity_party_name"],
+    "ValueEUR":     df["tender_value_amount"],
+    "Deadline":     df["tender_tenderPeriod_endDate"],
+})
 
-# 5. Select and rename needed columns
-out = df[[
-    'tender.id',
-    'tender.title',
-    'tender.procuringEntity.party.name',
-    'tender.value.amount',
-    'tender.value.currency',
-    'tender.tenderPeriod.endDate'
-]]
-out.columns = [
-    'ID',
-    'Title',
-    'Buyer',
-    'ValueAmount',
-    'ValueCurrency',
-    'SubmissionDeadline'
-]
+# 6) save CSV
+out.to_csv("daily_tender_notices.csv", index=False)
+print(f"✅ Saved {len(out)} tender notices for {today}")
 
-# 6. Save CSV
-dest = 'daily_tender_notices.csv'
-out.to_csv(dest, index=False)
-print(f"Saved {dest} with {len(out)} records for {today.isoformat()}.")
+# (optional) 7) send via email…
+# your existing email-sending code here
+
