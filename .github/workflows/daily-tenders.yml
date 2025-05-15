@@ -30,7 +30,7 @@ jobs:
       - name: Preview CSV
         run: |
           echo "First 10 lines of daily_tenders.csv"
-          head -n 10 daily_tenders.csv
+          head -n 10 daily_tender_notices.csv
 
       - name: Send email with CSV
         env:
@@ -45,7 +45,7 @@ jobs:
             to="info@grami-ltd.com",
             subject=f"Daily Kosovo Tenders – {__import__('datetime').date.today().isoformat()}",
             contents=["Please find today’s tender summary attached."],
-            attachments="daily_tenders.csv"
+            attachments="daily_tender_notices.csv"
           )
           PY
 
