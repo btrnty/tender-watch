@@ -2,48 +2,48 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-import os, sys, datetime, requests, pandas as pd
-
-# 0. (Optional) load OPENAI_API_KEY if you later re-enable summaries
-# import openai; openai.api_key = os.getenv("OPENAI_API_KEY")
+import os
+import sys
+import datetime
+import requests
+import pandas as pd
 
 # 1. Compute today’s date
-today = datetime.date.today().isoformat()
+today = datetime.date.today()
 
-# 2. Fetch TenderRelease data
+# 2. Fetch TenderRelease data (we'll filter by release date)
 url = "https://ocdskrpp.rks-gov.net/krppAPI/TenderRelease"
 params = {
-    "endDateFrom": today,
-    "endDateEnd":   today,
+    "endDateFrom": today.isoformat(),
+    "endDateEnd":   today.isoformat(),
     "DataFormat":   "json",
 }
 resp = requests.get(url, params=params, timeout=60)
 resp.raise_for_status()
 raw = resp.json()
 
-# 3. Flatten and filter
+# 3. Flatten releases and parse release date
 df = pd.json_normalize(raw, record_path=["releases"])
+df['release_date'] = pd.to_datetime(df['date']).dt.date
 
-# — only those published *today* —
-df = df[df["date"].str.startswith(today)]
-
-# — only initial “tender” notices (B05) —
-df = df[df["tag"].apply(lambda tags: isinstance(tags, list) and "tender" in tags)]
+# 4. Keep only those published today and tagged 'tender'
+df = df[df['release_date'] == today]
+df = df[df['tag'].apply(lambda tags: isinstance(tags, list) and 'tender' in tags)]
 
 if df.empty:
-    print("No tender notices published today.")
+    print(f"No tender notices published on {today.isoformat()}.")
     sys.exit(0)
 
-# 4. Pick and rename the columns we need
+# 5. Select and rename the needed columns
 out = df[[
-    "tender.title",
-    "tender.procuringEntity.party.name",
-    "tender.value.amount",
-    "tender.tenderPeriod.endDate"
+    'tender.title',
+    'tender.procuringEntity.party.name',
+    'tender.value.amount',
+    'tender.tenderPeriod.endDate'
 ]]
-out.columns = ["Title", "Buyer", "Value", "SubmissionDeadline"]
+out.columns = ['Title', 'Buyer', 'Value', 'SubmissionDeadline']
 
-# 5. Save CSV
-out.to_csv("daily_tender_notices.csv", index=False)
-print(f"Saved daily_tender_notices.csv with {len(out)} rows.")
-
+# 6. Save to CSV
+filename = 'daily_tender_notices.csv'
+out.to_csv(filename, index=False)
+print(f"Saved {filename} with {len(out)} records for {today.isoformat()}.")
