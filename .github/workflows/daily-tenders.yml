@@ -29,7 +29,7 @@ jobs:
 
       - name: Preview CSV
         run: |
-          echo "First 10 lines of daily_tenders.csv"
+          echo "First 10 lines of daily_tender_notices.csv"
           head -n 10 daily_tender_notices.csv
 
       - name: Send email with CSV
