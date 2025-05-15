@@ -31,13 +31,9 @@ resp = requests.get(url, params=params, timeout=60)
 resp.raise_for_status()
 raw = resp.json()
 
-# 3. Normalize and filter for initial tender publications ('tender' tag)
+# 3. Normalize and filter for initial tender notices (B05)
 df = pd.json_normalize(raw, record_path=["releases"])
-if df.empty:
-    print("No releases yesterday.")
-    sys.exit(0)
-# Keep only those tagged as 'tender'
-df = df[df['tag'].apply(lambda tags: 'tender' in tags if isinstance(tags, list) else False)]
+df = df[df['tag'].apply(lambda tags: isinstance(tags, list) and 'tender' in tags)]
 if df.empty:
     print("No tender notices published yesterday.")
     sys.exit(0)
@@ -57,7 +53,7 @@ def summarise_tender(row):
         f"Deadline: {deadline}" 
     )
     try:
-        resp = openai.ChatCompletion.create(
+        resp = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role":"user","content":prompt}]
         )
